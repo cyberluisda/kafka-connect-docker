@@ -1,4 +1,4 @@
-FROM ches/kafka:0.10.1.0
+FROM wurstmeister/kafka:0.10.1.1
 
 MAINTAINER Luis David Barrios Alfonso (luisdavid.barrios@agsnasoft.com / cyberluisda@gmail.com)
 
