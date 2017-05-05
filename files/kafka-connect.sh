@@ -5,7 +5,7 @@ set -e
 
 # Functions
 
-use() {
+usage() {
     echo "kafka-connect.sh [--servercfg server.cfg] name name_1|file connector_cfg_1 [name name_2|file connector_cfg_2 .. name name_n|file connector_cfg_n] "
     echo "  name : set that connector_cfg is a name that will be used to load"
     echo "    configuration from /etc/kafka-connect/connector_cfg.properties"
@@ -24,7 +24,7 @@ start_server() {
 
 if [ -z "$1" ]
 then
-  use
+  usage
   exit 1
 fi
 
@@ -37,7 +37,7 @@ while [ -n "$1" ]; do
     --server)
       if [ "$2" == "" ]
       then
-        use
+        usage
         exit 1
       else
         server_cfg_file="$2"
@@ -53,7 +53,7 @@ while [ -n "$1" ]; do
       shift
       ;;
     *)
-      use
+      usage
       exit 1
       ;;
   esac
