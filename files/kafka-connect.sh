@@ -6,13 +6,43 @@ set -e
 # Functions
 
 usage() {
-    echo "kafka-connect.sh [--servercfg server.cfg] name name_1|file connector_cfg_1 [name name_2|file connector_cfg_2 .. name name_n|file connector_cfg_n] "
-    echo "  name : set that connector_cfg is a name that will be used to load"
-    echo "    configuration from /etc/kafka-connect/connector_cfg.properties"
-    echo "  file : set that connector_cfg is a path to a file with connector config"
-    echo "    name test is the same like file /etc/kafka-connect/test.properties"
-    echo "  server.cfg path to kafka connect server."
-    echo "    By default is /etc/kafka-connect/connect.properties"
+    cat <<EOF
+Usage:
+
+      kafka-connect.sh [--servercfg <server.cfg>]
+                        name <name_1> | file <connector_cfg_1>
+		       [name <name_2> | file <connector_cfg_2>
+                       [name <name_3> | file <connector_cfg_3>
+		       [ ... e]]]
+
+  name : set that connector_cfg is a name that will be used to load
+    configuration from /etc/kafka-connect/connector_cfg.properties
+  file : set that connector_cfg is a path to a file with connector config
+    name test is the same like file /etc/kafka-connect/test.properties
+  server.cfg path to kafka connect server.
+    By default is /etc/kafka-connect/connect.properties
+
+Features:
+
+The properties files can include environment variables which will be
+replaced in this environment.
+
+E.g.,
+
+    connection.url=http://\${ES_HOST:-elasticsearch}:\${ES_PORT:-9200}
+
+will be replaced by whichever values of ES_HOST and ES_PORT may be
+available in the environment, falling back to "elasticsearch" and 9200
+respectively. The syntax accepts ${VAR} as environment variables, with
+replacement possibilities as offered by bash (e.g., :- for default
+values).
+
+Also, if some variable is to be completely replaced, you can pass a
+variable KC_OVERRIDE_PROPERTY_NAME=value in order to set
+property.name=value.
+
+EOF
+
 }
 
 
