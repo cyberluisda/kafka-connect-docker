@@ -80,10 +80,9 @@ resolve_variables() {
             fi
         fi
 
-	expandVarsStrict < "$1" > "$1.exp.properties"
-
-	echo "$1.exp.properties"
     done
+    expandVarsStrict < "$1" > "$1.exp.properties"
+    echo "$1.exp.properties"
 }
 
 
