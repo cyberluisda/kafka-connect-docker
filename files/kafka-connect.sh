@@ -11,9 +11,9 @@ Usage:
 
       kafka-connect.sh [--servercfg <server.cfg>]
                         name <name_1> | file <connector_cfg_1>
-		       [name <name_2> | file <connector_cfg_2>
+                       [name <name_2> | file <connector_cfg_2>
                        [name <name_3> | file <connector_cfg_3>
-		       [ ... e]]]
+                       [ ... e]]]
 
   name : set that connector_cfg is a name that will be used to load
     configuration from /etc/kafka-connect/connector_cfg.properties
@@ -56,29 +56,29 @@ expandVarsStrict() {
 
     local line lineEscaped
     while IFS= read -r line || [[ -n $line ]]; do # the `||` clause ensures that the last line is read even if it doesn't end with \n
-	# Escape ALL chars. that could trigger an expansion
-	IFS= read -r -d '' lineEscaped < <(printf %s "$line" | tr '`([$' '\1\2\3\4')
-	# ... then selectively reenable ${ references
-	lineEscaped=${lineEscaped//$'\4{'/\$'{'}
-	# Finally, escape embedded double quotes to preserve them.
-	lineEscaped=${lineEscaped//\"/\\\"}
-	eval "printf '%s\n' \"$lineEscaped\"" | tr '\1\2\3\4' '`([$'
+        # Escape ALL chars. that could trigger an expansion
+        IFS= read -r -d '' lineEscaped < <(printf %s "$line" | tr '`([$' '\1\2\3\4')
+        # ... then selectively reenable ${ references
+        lineEscaped=${lineEscaped//$'\4{'/\$'{'}
+        # Finally, escape embedded double quotes to preserve them.
+        lineEscaped=${lineEscaped//\"/\\\"}
+        eval "printf '%s\n' \"$lineEscaped\"" | tr '\1\2\3\4' '`([$'
     done
 }
 
 resolve_variables() {
     for VAR in `env`
     do
-	if [[ $VAR =~ ^KC_OVERRIDE_ ]]; then
-	    kconnect_name=$(echo "$VAR" | sed -r 's/KC_OVERRIDE_(.*)=.*/\1/g' | tr '[:upper:]' '[:lower:]' | tr _ .)
-	    env_var=$(echo "$VAR" | sed -r 's/(.*)=.*/\1/g')
+        if [[ $VAR =~ ^KC_OVERRIDE_ ]]; then
+            kconnect_name=$(echo "$VAR" | sed -r 's/KC_OVERRIDE_(.*)=.*/\1/g' | tr '[:upper:]' '[:lower:]' | tr _ .)
+            env_var=$(echo "$VAR" | sed -r 's/(.*)=.*/\1/g')
 
-	    if egrep -q "(^|^#)$kconnect_name=" "$1"; then
-		sed -r -i "s@(^|^#)($kconnect_name)=(.*)@\2=${!env_var}@g" "$1"
-	    else
-		echo "Preexisting variable $kconnect_name not found at $1" >&2
-	    fi
-	fi
+            if egrep -q "(^|^#)$kconnect_name=" "$1"; then
+                sed -r -i "s@(^|^#)($kconnect_name)=(.*)@\2=${!env_var}@g" "$1"
+            else
+                echo "Preexisting variable $kconnect_name not found at $1" >&2
+            fi
+        fi
 
 	expandVarsStrict < "$1" > "$1.exp.properties"
 
@@ -128,3 +128,7 @@ while [ -n "$1" ]; do
 done
 
 start_server "${server_cfg_file}" ${connectors_cfg[@]}
+
+# Local Variables:
+# indent-tabs-mode: nil
+# End:
