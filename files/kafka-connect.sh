@@ -233,5 +233,5 @@ if [ -z ${connectors_cfg} ]; then
   exit 1
 fi
 
-echo "launhing servers start_server "${server_cfg_file}" ${connectors_cfg[@]}"
+echo "launhing server start_server "${server_cfg_file}" ${connectors_cfg[@]}"
 start_server "${server_cfg_file}" ${connectors_cfg[@]}
