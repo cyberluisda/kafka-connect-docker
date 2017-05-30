@@ -63,14 +63,15 @@ edit_file() {
   local propertiesApplided=0
   shift
   while [[ "$1" =~ ([^= ]+)=.* ]]; do
-
     # Extract property name
     local property_name=${BASH_REMATCH[1]}
 
-    # Remove exisitng property in file if exists
-    local tempFile=$(mktemp)
-    egrep -ve "^[[:space:]]*${property_name}[[:space:]]*=" $file_name > "$tempFile"
-    mv -f "$tempFile" "$file_name"
+    # Remove exisitng property in file if exists and file is not empty
+    if [ $(wc -c $file_name | cut -d ' ' -f1) -gt 0 ]; then
+      local tempFile=$(mktemp)
+      egrep -ve "^[[:space:]]*${property_name}[[:space:]]*=" $file_name > "$tempFile"
+      mv -f "$tempFile" "$file_name"
+    fi
 
     #Append to end
     echo "" >> "$file_name"
