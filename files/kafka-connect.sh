@@ -13,13 +13,20 @@ Usage:
     [ --servercfg <server.cfg> ]
     name <name_1> | file <connector_cfg_1>
     [ name <name_2> | file <connector_cfg_2> ... name <name_n> | file <connector_cfg_n> ]
-    [ --config-props <property=value_1> [<property=value_2> ... <property=value_n> ]
-    [ --config-props-over-name <name_1> <property=value_1> [<property=value_2> ... <property=value_n> ]]
+    [ --config-props <property_1=value_1> [<property_2=value_2> ... <property_n=value_n> ]
+    [ --config-props-over-name <name_1> <property_1=value_1> [<property_2=value_2> ... <property_n=value_n> ]]
     ...
-    [ --config-props-over-name <name_n> <property=value_1> [<property=value_2> ... <property=value_n> ]]
-    [ --config-props-over-file <file_1> <property=value_1> [<property=value_2> ... <property=value_n> ]]
+    [ --config-props-over-name <name_n> <property_1=value_1> [<property_2=value_2> ... <property_n=value_n> ]]
+    [ --config-props-over-file <file_1> <property_1=value_1> [<property_2=value_2> ... <property_n=value_n> ]]
     ...
-    [ --config-props-over-file <file_n> <property=value_1> [<property=value_2> ... <property=value_n> ]]
+    [ --config-props-over-file <file_n> <property_1=value_1> [<property_2=value_2> ... <property_n=value_n> ]]
+    [ --config-props-from-env-var env_var_name ]
+    [ --config-props-over-name-from-env-var env_var_name_1 ]
+    ...
+    [ --config-props-over-name-from-env-var env_var_name_n ]
+    [ --config-props-over-file-from-env-var env_var_name_1 ]
+    ...
+    [ --config-props-over-file-from-env-var env_var_name_n ]
 
   name : set that <name_n> is a name that will be used to load
     configuration from /etc/kafka-connect/<name_n>.properties
@@ -46,8 +53,21 @@ Usage:
     <file_n>. It is the path file of connector (file <connector_cfg_n>) or value of
     <server.cfg>
 
+  --config-props*-from-env-var are similart to config-props* but we expecta a
+    environment variables names while extract the same values like if we use directly
+    in command line
+
+    For exmaple: next options are totally equivalent:
+
+    kafka-connect.sh --config-props property_one=value_of_property_one property_two=value_of_property_two
+
+    export GLOBAL_PROPS="property_one=value_of_property_one property_two=value_of_property_two" &&
+    kafka-connect.sh --config-props-from-env-var GLOBAL_PROPS
+
   NOTE: For simplification of the algorithm --config-props, --config-props-over-name,
-  and --config-props-over-file options must be set at end of command line.
+  --config-props-over-file --config-props-from-env-var,
+  --config-props-over-name-from-env-var,  and --config-props-over-file-from-env-var
+  options must be set at end of command line.
 
 EOF
 
@@ -218,6 +238,89 @@ while [ -n "$1" ]; do
         # Shift parameters applied on edit_file
         shift $paramstToShift
       fi
+      ;;
+    --config-props-from-env-var)
+      if [ -z "$2" ]; then
+        echo "--config-props-from-env-var without environment var name"
+        usage
+        exit 1
+      fi
+
+      env_var_name="$2"
+      parameters="$(eval echo -n \$${env_var_name})"
+      for f in $WORKINGPATH/*; do
+        if [ "$f" != "$server_cfg_file" ]; then
+          echo "Editing on-fly configuration file $f"
+          edit_file "$f" $parameters > /dev/null
+        fi
+      done
+
+      # Shift parameters (option and env var name)
+      shift 2
+      ;;
+    --config-props-over-name-from-env-var)
+      if [ -z "$2" ]; then
+        echo "--config-props-over-name-from-env-var without environment var name"
+        usage
+        exit 1
+      fi
+      env_var_name="$2"
+      parameters="$(eval echo -n \$${env_var_name})"
+
+      #Extract (and pop) name from parameters
+      read -r name parameters <<< "${parameters}"
+      if [ -z "$name" ]; then
+        echo "--config-props-over-name-from-env-var without connetor name when load data from ${env_var_name} environment variable"
+        usage
+        exit 1
+      fi
+      if [ -z "$parameters" ]; then
+        echo "--config-props-over-name-from-env-var without any option when load data from ${env_var_name} environment variable"
+        usage
+        exit 1
+      fi
+      if [ ! -f $WORKINGPATH/$name.properties ]; then
+        echo "--config-props-over-name-from-env-var: $name set does not exist. Ignoring"
+      else
+        echo "Editing on-fly connector $name file $WORKINGPATH/$name.properties"
+        edit_file "$WORKINGPATH/$name.properties" $parameters > /dev/null
+      fi
+
+      # Shift parameters (option and env var name)
+      shift 2
+      ;;
+    --config-props-over-file-from-env-var)
+      if [ -z "$2" ]; then
+        echo "--config-props-over-file-from-env-var without environment var name"
+        usage
+        exit 1
+      fi
+      env_var_name="$2"
+      parameters="$(eval echo -n \$${env_var_name})"
+
+      #Extract (and pop) fullName from parameters
+      read -r fullName parameters <<< "${parameters}"
+      name="$(basename $fullName)"
+
+      if [ -z "$fullName" ]; then
+        echo "--config-props-over-file-from-env-var: without connetor file name when load data from ${env_var_name} environment variable"
+        usage
+        exit 1
+      fi
+      if [ -z "$parameters" ]; then
+        echo "--config-props-over-file-from-env-var without any option when load data from ${env_var_name} environment variable"
+        usage
+        exit 1
+      fi
+      if [ ! -f $WORKINGPATH/$name ]; then
+        echo "--config-props-over-file-from-env-var $fullName (working file $WORKINGPATH/$name) does not exist when load data from ${env_var_name} environment variable. Ignoring"
+      else
+        echo "Editing on-fly cofiguration file $fullName (working file $WORKINGPATH/$name)"
+        edit_file "$WORKINGPATH/$name" $parameters > /dev/null
+      fi
+
+      # Shift parameters (option and env var name)
+      shift 2
       ;;
     *)
       echo "Unknown option $1"
