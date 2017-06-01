@@ -11,6 +11,7 @@ Usage:
 
   kafka-connect.sh
     [ --servercfg <server.cfg> ]
+    [ --distributed-end-point <url> ]
     start-distributed-worker | name <name_1> | file <connector_cfg_1>
     [ name <name_2> | file <connector_cfg_2> ... name <name_n> | file <connector_cfg_n> ]
     [ --config-props <property_1=value_1> [<property_2=value_2> ... <property_n=value_n> ]
@@ -28,11 +29,17 @@ Usage:
     ...
     [ --config-props-over-file-from-env-var env_var_name_n ]
 
-    start-distributed-worker: Stars worker node based on configuration of server.cfg
-      In this case any connector will be launched, only a worker node.
+  --distributed-end-point <url>: If this opition is present, connectors will be
+    launched using REST service behind this <url> end point.
+    After response of REST service current process will be end.
+
+  start-distributed-worker: Stars worker node based on configuration of server.cfg
+    In this case any connector will be launched, only a worker node.
 
   name : set that <name_n> is a name that will be used to load
-    configuration from /etc/kafka-connect/<name_n>.properties
+    configuration from /etc/kafka-connect/<name_n>.properties.
+    NOTE: In distrbuted mode /etc/kafka-connect/<name_n>.properties will
+    be wrapped with a JSON file in order to starts connector over connector class.
 
   file : set that <connector_cfg> is a path to a file with connector config
   <server.cfg> path to kafka connect server.
@@ -178,6 +185,7 @@ fi
 # Default config
 server_cfg_file="/etc/kafka-connect/connect.properties"
 distributed_mode="no"
+distributed_url_end_point=""
 
 # Creating TEMP_PATH
 WORKINGPATH=$(mktemp -d --suffix="-kafka-connect-sh")
@@ -204,6 +212,18 @@ while [ -n "$1" ]; do
         server_cfg_file="$WORKINGPATH/$server_cfg_file_basename"
         shift 2
       fi
+      ;;
+    --distributed-end-point)
+      if [ "$2" == "" ]
+      then
+        echo "ERROR: --distributed-end-point option without argument."
+        usage
+        exit 1
+      else
+        distributed_mode="distributed"
+        distributed_url_end_point="$2"
+      fi
+      shift 2
       ;;
     start-distributed-worker)
       distributed_mode="worker"
@@ -402,6 +422,10 @@ if [ "$distributed_mode" != "worker" ]; then
 fi
 
 case $distributed_mode in
+  distributed)
+    echo "Launching jobs over distributed cluster workes. End point: $distributed_url_end_point, connectors config: ${connectors_cfg[@]}"
+    launch_over_distributed_worker "$distributed_url_end_point" ${connectors_cfg[@]}
+    ;;
   worker)
     echo "Launching worker"
     start_server_worker "${server_cfg_file}"
