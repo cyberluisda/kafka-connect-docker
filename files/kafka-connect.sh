@@ -11,7 +11,8 @@ Usage:
 
   kafka-connect.sh
     [ --servercfg <server.cfg> ]
-    name <name_1> | file <connector_cfg_1>
+    [ --distributed-end-point <url> ]
+    start-distributed-worker | name <name_1> | file <connector_cfg_1>
     [ name <name_2> | file <connector_cfg_2> ... name <name_n> | file <connector_cfg_n> ]
     [ --config-props <property_1=value_1> [<property_2=value_2> ... <property_n=value_n> ]
     [ --config-props-over-name <name_1> <property_1=value_1> [<property_2=value_2> ... <property_n=value_n> ]]
@@ -28,8 +29,17 @@ Usage:
     ...
     [ --config-props-over-file-from-env-var env_var_name_n ]
 
+  --distributed-end-point <url>: If this opition is present, connectors will be
+    launched using REST service behind this <url> end point.
+    After response of REST service current process will be end.
+
+  start-distributed-worker: Stars worker node based on configuration of server.cfg
+    In this case any connector will be launched, only a worker node.
+
   name : set that <name_n> is a name that will be used to load
-    configuration from /etc/kafka-connect/<name_n>.properties
+    configuration from /etc/kafka-connect/<name_n>.properties.
+    NOTE: In distrbuted mode /etc/kafka-connect/<name_n>.properties will
+    be wrapped with a JSON file in order to starts connector over connector class.
 
   file : set that <connector_cfg> is a path to a file with connector config
   <server.cfg> path to kafka connect server.
@@ -73,9 +83,62 @@ EOF
 
 }
 
-
-start_server() {
+start_server_standalone() {
   connect-standalone.sh $@
+}
+
+start_server_worker() {
+  connect-distributed.sh $1
+}
+
+##
+# PARAMS
+##
+#  $1 endpoint (i.e http://localhost:8083) of distributed worker cluster.
+launch_over_distributed_worker() {
+  local end_point="${1}/connectors"
+  shift
+  while [ -n "$1" ]; do
+    echo "Launching job with file $1 to worker cluster ${end_point}"
+    wrapp_with_json "$1" | curl \
+      -X POST \
+      -H "Content-Type: application/json" \
+      --data @- \
+      "${end_point}"
+    shift
+  done
+}
+
+##
+# Wrap properties file of connector configuration into a JSON file.
+# and push to sdout
+##
+# PARAMS:
+##
+# $1: file name
+##
+wrapp_with_json() {
+  # extract name
+  local name=$(cat "$1" | egrep -oe '^[[:space:]]*name[[:space:]]*=.*' | sed 's/[^= ]*= *//')
+  if [ "$name" == "" ]; then
+    echo "FATAL: I can not extract value of property name from file $1:"
+    cat "$1"
+    exit 1
+  fi
+  local value=$(
+    echo -n "{ \"name\": \"$name\", \"config\": {"
+    cat "$1" | while read line; do
+      #trim spaces
+      line="${line// /}"
+      propname="${line%=*}"
+      propvalue="${line#*=}"
+      echo " \"$propname\": \"$propvalue\","
+    done
+    # End json and mark with "d":"d" last prop to remove incongruent ','
+    echo "\"d\":\"d\"}}"
+  )
+  # Remove incongruent "d":"d"
+  echo -n $value | sed 's/,"d":"d"\}/}/'
 }
 
 edit_file() {
@@ -121,6 +184,8 @@ fi
 
 # Default config
 server_cfg_file="/etc/kafka-connect/connect.properties"
+distributed_mode="no"
+distributed_url_end_point=""
 
 # Creating TEMP_PATH
 WORKINGPATH=$(mktemp -d --suffix="-kafka-connect-sh")
@@ -137,6 +202,7 @@ while [ -n "$1" ]; do
     --server)
       if [ "$2" == "" ]
       then
+        echo "ERROR: --server option without argument."
         usage
         exit 1
       else
@@ -146,6 +212,22 @@ while [ -n "$1" ]; do
         server_cfg_file="$WORKINGPATH/$server_cfg_file_basename"
         shift 2
       fi
+      ;;
+    --distributed-end-point)
+      if [ "$2" == "" ]
+      then
+        echo "ERROR: --distributed-end-point option without argument."
+        usage
+        exit 1
+      else
+        distributed_mode="distributed"
+        distributed_url_end_point="$2"
+      fi
+      shift 2
+      ;;
+    start-distributed-worker)
+      distributed_mode="worker"
+      shift
       ;;
     name)
       if [ -f "/etc/kafka-connect/${2}.properties" ]; then
@@ -330,12 +412,26 @@ while [ -n "$1" ]; do
   esac
 done
 
-if [ -z ${connectors_cfg} ]; then
-  rm_temp_path $WORKINGPATH
-  echo "Connectors list empty"
-  usage
-  exit 1
+if [ "$distributed_mode" != "worker" ]; then
+  if [ -z ${connectors_cfg} ]; then
+    rm_temp_path $WORKINGPATH
+    echo "Connectors list empty"
+    usage
+    exit 1
+  fi
 fi
 
-echo "launhing server start_server "${server_cfg_file}" ${connectors_cfg[@]}"
-start_server "${server_cfg_file}" ${connectors_cfg[@]}
+case $distributed_mode in
+  distributed)
+    echo "Launching jobs over distributed cluster workes. End point: $distributed_url_end_point, connectors config: ${connectors_cfg[@]}"
+    launch_over_distributed_worker "$distributed_url_end_point" ${connectors_cfg[@]}
+    ;;
+  worker)
+    echo "Launching worker"
+    start_server_worker "${server_cfg_file}"
+    ;;
+  *)
+    echo "Launhing standalone server, server config: ${server_cfg_file}, connectors config: ${connectors_cfg[@]}"
+    start_server_standalone "${server_cfg_file}" ${connectors_cfg[@]}
+    ;;
+esac
