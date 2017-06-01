@@ -137,6 +137,7 @@ while [ -n "$1" ]; do
     --server)
       if [ "$2" == "" ]
       then
+        echo "ERROR: --server option without argument."
         usage
         exit 1
       else
