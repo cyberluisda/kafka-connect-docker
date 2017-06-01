@@ -11,7 +11,7 @@ Usage:
 
   kafka-connect.sh
     [ --servercfg <server.cfg> ]
-    name <name_1> | file <connector_cfg_1>
+    start-distributed-worker | name <name_1> | file <connector_cfg_1>
     [ name <name_2> | file <connector_cfg_2> ... name <name_n> | file <connector_cfg_n> ]
     [ --config-props <property_1=value_1> [<property_2=value_2> ... <property_n=value_n> ]
     [ --config-props-over-name <name_1> <property_1=value_1> [<property_2=value_2> ... <property_n=value_n> ]]
@@ -27,6 +27,9 @@ Usage:
     [ --config-props-over-file-from-env-var env_var_name_1 ]
     ...
     [ --config-props-over-file-from-env-var env_var_name_n ]
+
+    start-distributed-worker: Stars worker node based on configuration of server.cfg
+      In this case any connector will be launched, only a worker node.
 
   name : set that <name_n> is a name that will be used to load
     configuration from /etc/kafka-connect/<name_n>.properties
@@ -73,9 +76,12 @@ EOF
 
 }
 
-
-start_server() {
+start_server_standalone() {
   connect-standalone.sh $@
+}
+
+start_server_worker() {
+  connect-distributed.sh $1
 }
 
 edit_file() {
@@ -121,6 +127,7 @@ fi
 
 # Default config
 server_cfg_file="/etc/kafka-connect/connect.properties"
+distributed_mode="no"
 
 # Creating TEMP_PATH
 WORKINGPATH=$(mktemp -d --suffix="-kafka-connect-sh")
@@ -147,6 +154,10 @@ while [ -n "$1" ]; do
         server_cfg_file="$WORKINGPATH/$server_cfg_file_basename"
         shift 2
       fi
+      ;;
+    start-distributed-worker)
+      distributed_mode="worker"
+      shift
       ;;
     name)
       if [ -f "/etc/kafka-connect/${2}.properties" ]; then
@@ -331,12 +342,22 @@ while [ -n "$1" ]; do
   esac
 done
 
-if [ -z ${connectors_cfg} ]; then
-  rm_temp_path $WORKINGPATH
-  echo "Connectors list empty"
-  usage
-  exit 1
+if [ "$distributed_mode" != "worker" ]; then
+  if [ -z ${connectors_cfg} ]; then
+    rm_temp_path $WORKINGPATH
+    echo "Connectors list empty"
+    usage
+    exit 1
+  fi
 fi
 
-echo "launhing server start_server "${server_cfg_file}" ${connectors_cfg[@]}"
-start_server "${server_cfg_file}" ${connectors_cfg[@]}
+case $distributed_mode in
+  worker)
+    echo "Launching worker"
+    start_server_worker "${server_cfg_file}"
+    ;;
+  *)
+    echo "Launhing standalone server, server config: ${server_cfg_file}, connectors config: ${connectors_cfg[@]}"
+    start_server_standalone "${server_cfg_file}" ${connectors_cfg[@]}
+    ;;
+esac
