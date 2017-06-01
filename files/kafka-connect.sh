@@ -84,6 +84,56 @@ start_server_worker() {
   connect-distributed.sh $1
 }
 
+##
+# PARAMS
+##
+#  $1 endpoint (i.e http://localhost:8083) of distributed worker cluster.
+launch_over_distributed_worker() {
+  local end_point="${1}/connectors"
+  shift
+  while [ -n "$1" ]; do
+    echo "Launching job with file $1 to worker cluster ${end_point}"
+    wrapp_with_json "$1" | curl \
+      -X POST \
+      -H "Content-Type: application/json" \
+      --data @- \
+      "${end_point}"
+    shift
+  done
+}
+
+##
+# Wrap properties file of connector configuration into a JSON file.
+# and push to sdout
+##
+# PARAMS:
+##
+# $1: file name
+##
+wrapp_with_json() {
+  # extract name
+  local name=$(cat "$1" | egrep -oe '^[[:space:]]*name[[:space:]]*=.*' | sed 's/[^= ]*= *//')
+  if [ "$name" == "" ]; then
+    echo "FATAL: I can not extract value of property name from file $1:"
+    cat "$1"
+    exit 1
+  fi
+  local value=$(
+    echo -n "{ \"name\": \"$name\", \"config\": {"
+    cat "$1" | while read line; do
+      #trim spaces
+      line="${line// /}"
+      propname="${line%=*}"
+      propvalue="${line#*=}"
+      echo " \"$propname\": \"$propvalue\","
+    done
+    # End json and mark with "d":"d" last prop to remove incongruent ','
+    echo "\"d\":\"d\"}}"
+  )
+  # Remove incongruent "d":"d"
+  echo -n $value | sed 's/,"d":"d"\}/}/'
+}
+
 edit_file() {
   local file_name="$1"
   local propertiesApplided=0
