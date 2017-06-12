@@ -99,8 +99,13 @@ launch_over_distributed_worker() {
   local end_point="${1}/connectors"
   shift
   while [ -n "$1" ]; do
-    echo "Launching job with file $1 to worker cluster ${end_point}"
-    wrapp_with_json "$1" | curl \
+    echo "Launching job with file $1 to worker cluster ${end_point} with configuration (on-fly)"
+    echo "From:"
+    cat "$1"
+    echo "To:"
+    wrap_with_json "$1"
+    echo ""
+    wrap_with_json "$1" | curl \
       -X POST \
       -H "Content-Type: application/json" \
       --data @- \
@@ -117,7 +122,7 @@ launch_over_distributed_worker() {
 ##
 # $1: file name
 ##
-wrapp_with_json() {
+wrap_with_json() {
   # extract name
   local name=$(cat "$1" | egrep -oe '^[[:space:]]*name[[:space:]]*=.*' | sed 's/[^= ]*= *//')
   if [ "$name" == "" ]; then
@@ -127,7 +132,8 @@ wrapp_with_json() {
   fi
   local value=$(
     echo -n "{ \"name\": \"$name\", \"config\": {"
-    cat "$1" | while read line; do
+    #Properties file without emptylines and comments
+    cat "$1" | egrep -ve '^[[:space:]]*$' | egrep -ve '^[[:space:]]*#' | while read line; do
       #trim spaces
       line="${line// /}"
       propname="${line%=*}"
@@ -138,7 +144,7 @@ wrapp_with_json() {
     echo "\"d\":\"d\"}}"
   )
   # Remove incongruent "d":"d"
-  echo -n $value | sed 's/,"d":"d"\}/}/'
+  echo -n $value | sed 's/, "d":"d"\}/}/'
 }
 
 edit_file() {
