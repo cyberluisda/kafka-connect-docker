@@ -132,7 +132,8 @@ wrap_with_json() {
   fi
   local value=$(
     echo -n "{ \"name\": \"$name\", \"config\": {"
-    cat "$1" | while read line; do
+    #Properties file without emptylines and comments
+    cat "$1" | egrep -ve '^[[:space:]]*$' | egrep -ve '^[[:space:]]*#' | while read line; do
       #trim spaces
       line="${line// /}"
       propname="${line%=*}"
