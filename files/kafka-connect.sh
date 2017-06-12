@@ -99,7 +99,12 @@ launch_over_distributed_worker() {
   local end_point="${1}/connectors"
   shift
   while [ -n "$1" ]; do
-    echo "Launching job with file $1 to worker cluster ${end_point}"
+    echo "Launching job with file $1 to worker cluster ${end_point} with configuration (on-fly)"
+    echo "From:"
+    cat "$1"
+    echo "To:"
+    wrap_with_json "$1"
+    echo ""
     wrap_with_json "$1" | curl \
       -X POST \
       -H "Content-Type: application/json" \
