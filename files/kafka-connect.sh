@@ -138,7 +138,7 @@ wrapp_with_json() {
     echo "\"d\":\"d\"}}"
   )
   # Remove incongruent "d":"d"
-  echo -n $value | sed 's/,"d":"d"\}/}/'
+  echo -n $value | sed 's/, "d":"d"\}/}/'
 }
 
 edit_file() {
