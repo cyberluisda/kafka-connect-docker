@@ -100,7 +100,7 @@ launch_over_distributed_worker() {
   shift
   while [ -n "$1" ]; do
     echo "Launching job with file $1 to worker cluster ${end_point}"
-    wrapp_with_json "$1" | curl \
+    wrap_with_json "$1" | curl \
       -X POST \
       -H "Content-Type: application/json" \
       --data @- \
@@ -117,7 +117,7 @@ launch_over_distributed_worker() {
 ##
 # $1: file name
 ##
-wrapp_with_json() {
+wrap_with_json() {
   # extract name
   local name=$(cat "$1" | egrep -oe '^[[:space:]]*name[[:space:]]*=.*' | sed 's/[^= ]*= *//')
   if [ "$name" == "" ]; then
