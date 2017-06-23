@@ -2,6 +2,9 @@
 set -e
 
 # Common configuration
+WAIT_BETWEEN_CHECKS=${WAIT_BETWEEN_CHECKS:-5}
+CHECK_MESSAGES=${CHECK_MESSAGES:-no}
+CHECK_EGREP_PATTERN=${CHECK_EGREP_PATTERN:-RUNNING}
 
 # Functions
 
@@ -11,7 +14,7 @@ Usage:
 
   kafka-connect.sh
     [ --servercfg <server.cfg> ]
-    [ --distributed-end-point <url> ]
+    [ --distributed-end-point <url> [--health-check-all | --health-check-one] [--force-remove]]
     start-distributed-worker | name <name_1> | file <connector_cfg_1>
     [ name <name_2> | file <connector_cfg_2> ... name <name_n> | file <connector_cfg_n> ]
     [ --config-props <property_1=value_1> [<property_2=value_2> ... <property_n=value_n> ]
@@ -32,6 +35,21 @@ Usage:
   --distributed-end-point <url>: If this opition is present, connectors will be
     launched using REST service behind this <url> end point.
     After response of REST service current process will be end.
+
+  --health-check-one and --health-check-all. When one of this option is present
+    and --distributed-end-point is active too, current program does not finish
+    just after launchs connector over distributed cluster (default). Instead of
+    this current program will remaining checking at least one task per connector
+    is running:
+
+    --health-check-all: Current program will finish with exit status 2 if there
+    are not any job with at least one task in running mode.
+
+    --health-check-one: Current program will finish with exit status 2 when one
+    job connetor will have not any task in running mode.
+
+  --force-remove: If present and connector exists with same name. Existing connector
+    will be removed before launch connector over distributed cluster.
 
   start-distributed-worker: Stars worker node based on configuration of server.cfg
     In this case any connector will be launched, only a worker node.
@@ -94,11 +112,21 @@ start_server_worker() {
 ##
 # PARAMS
 ##
-#  $1 endpoint (i.e http://localhost:8083) of distributed worker cluster.
+#  $1 force_remove: if yes and there are one job with same name, exsisting job will
+#     be removed just before launch new connector
+#  $2 endpoint (i.e http://localhost:8083) of distributed worker cluster.
+#  $3..$@ connectors configurations
 launch_over_distributed_worker() {
+  local force_remove="$1"
+  shift
+  local original_endpoint=$1
   local end_point="${1}/connectors"
   shift
   while [ -n "$1" ]; do
+    if [ "$force_remove" == "yes" ]; then
+      local connector_to_delete_name=$(check_exist_in_distributed "$original_endpoint" "$1")
+      delete_by_name_in_distributed "$original_endpoint" "$connector_to_delete_name"
+    fi
     echo "Launching job with file $1 to worker cluster ${end_point} with configuration (on-fly)"
     echo "From:"
     cat "$1"
@@ -111,6 +139,110 @@ launch_over_distributed_worker() {
       --data @- \
       "${end_point}"
     shift
+  done
+}
+
+##
+# Checks if connector loaded from configuratin exists, if exists return connector name.
+# Else return empty string
+##
+# PARAMS
+##
+#   $1 endpoint (i.e http://localhost:8083) of distributed worker cluster.
+#   $2 onnectors configurations
+##
+check_exist_in_distributed(){
+  local end_point="$1/connectors"
+  shift
+  # extract name
+  local name=$(cat "$1" | egrep -oe '^[[:space:]]*name[[:space:]]*=.*' | sed 's/[^= ]*= *//')
+  local error_code=$(curl "$end_point/$name/status" | jq '.error_code' 2> /dev/null)
+
+  # With error_code null connector exists
+  if [ "$error_code" == "null" ]; then
+    echo -n $name
+  else
+    echo -n ""
+  fi
+}
+
+##
+# Delete existing job by name
+##
+# PARAMS
+##
+#   $1 endpoint (i.e http://localhost:8083) of distributed worker cluster.
+#   $2 connectors name
+##
+delete_by_name_in_distributed(){
+  if [ -n "$2" ]; then
+    local end_point="$1/connectors/$2"
+    echo "Deleting job $2 ($end_point)"
+
+    curl -XDELETE "$end_point"
+  fi
+}
+
+##
+# PARAMS
+##
+#  $1 check mode, allowed values
+#     none: no check
+#     all: exit with error status when there is not any job which status matchs with
+#          CHECK_EGREP_PATTERN
+#     one: exit with error status when there is at least one job which status matchs with
+#          CHECK_EGREP_PATTERN
+#     ANY_OTHER_VALUE: same as none
+#  $2 endpoint (i.e http://localhost:8083) of distributed worker cluster.
+#  $3..$@ connectors configurations
+health_check_over_distributed_mode(){
+  echo ""
+  echo "Starging health check with config" $@
+  local mode="${1}"
+  shift
+  local end_point="${1}/connectors"
+  shift
+
+  #Extract names
+  local -a names
+  while [ -n "$1" ]; do
+    local name=$(cat "$1" | egrep -oe '^[[:space:]]*name[[:space:]]*=.*' | sed 's/[^= ]*= *//')
+    if [ "$name" == "" ]; then
+      echo "FATAL: I can not extract value of property name from file $1:"
+      cat "$1"
+      exit 1
+    fi
+    names+=($name)
+    shift
+  done
+
+  #Sleep at begin to give time to connectors startup
+  sleep $WAIT_BETWEEN_CHECKS
+
+  while [ "$mode" == "all" -o "$mode" == "one" ]; do
+    local failing=0
+    for (( i=0 ; i<${#names[@]} ; i++ )); do
+      local name="${names[i]}"
+      [ "$CHECK_MESSAGES" == "yes" ] && echo -n "checking connector $name..."
+      if curl -s "${end_point}/$name/status" | egrep -e "$CHECK_EGREP_PATTERN" 2>&1 > /dev/null; then
+        [ "$CHECK_MESSAGES" == "yes" ] && echo "OK"
+      else
+        [ "$CHECK_MESSAGES" == "yes" ] && curl -s "${end_point}/$name/status"
+        [ "$CHECK_MESSAGES" == "yes" ] && echo "KO"
+        failing=$((failing + 1))
+      fi
+
+      if [ "$mode" == "one" -a $failing -gt 0 ]; then
+        echo "Status of job $name returned response that does not match with $CHECK_EGREP_PATTERN patthern and check mode is $mode => ERROR"
+        exit 2
+      fi
+
+      if [ "$mode" == "all" -a $failing -ge ${#names[@]}  ]; then
+        echo "Any job of: ${names[@]} returned response that does not match with $CHECK_EGREP_PATTERN patthern and check mode is $mode => ERROR"
+        exit 2
+      fi
+    done
+    sleep $WAIT_BETWEEN_CHECKS
   done
 }
 
@@ -192,6 +324,10 @@ fi
 server_cfg_file="/etc/kafka-connect/connect.properties"
 distributed_mode="no"
 distributed_url_end_point=""
+#Allowed values are none, all, one
+healt_check_in_distributed_mode="none"
+#Allowed values yes/no
+force_remove_in_distributed_mode="no"
 
 # Creating TEMP_PATH
 WORKINGPATH=$(mktemp -d --suffix="-kafka-connect-sh")
@@ -230,6 +366,18 @@ while [ -n "$1" ]; do
         distributed_url_end_point="$2"
       fi
       shift 2
+      ;;
+    --health-check-one)
+      healt_check_in_distributed_mode="one"
+      shift
+      ;;
+    --health-check-all)
+      healt_check_in_distributed_mode="all"
+      shift
+      ;;
+    --force-remove)
+      force_remove_in_distributed_mode="yes"
+      shift
       ;;
     start-distributed-worker)
       distributed_mode="worker"
@@ -430,7 +578,8 @@ fi
 case $distributed_mode in
   distributed)
     echo "Launching jobs over distributed cluster workes. End point: $distributed_url_end_point, connectors config: ${connectors_cfg[@]}"
-    launch_over_distributed_worker "$distributed_url_end_point" ${connectors_cfg[@]}
+    launch_over_distributed_worker "$force_remove_in_distributed_mode" "$distributed_url_end_point" ${connectors_cfg[@]}
+    health_check_over_distributed_mode "$healt_check_in_distributed_mode" "$distributed_url_end_point" ${connectors_cfg[@]}
     ;;
   worker)
     echo "Launching worker"
