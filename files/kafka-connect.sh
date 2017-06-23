@@ -109,12 +109,21 @@ start_server_worker() {
 ##
 # PARAMS
 ##
-#  $1 endpoint (i.e http://localhost:8083) of distributed worker cluster.
-#  $2..$@ connectors configurations
+#  $1 force_remove: if yes and there are one job with same name, exsisting job will
+#     be removed just before launch new connector
+#  $2 endpoint (i.e http://localhost:8083) of distributed worker cluster.
+#  $3..$@ connectors configurations
 launch_over_distributed_worker() {
+  local force_remove="$1"
+  shift
+  local original_endpoint=$1
   local end_point="${1}/connectors"
   shift
   while [ -n "$1" ]; do
+    if [ "$force_remove" == "yes" ]; then
+      local connector_to_delete_name=$(check_exist_in_distributed "$original_endpoint" "$1")
+      delete_by_name_in_distributed "$original_endpoint" "$connector_to_delete_name"
+    fi
     echo "Launching job with file $1 to worker cluster ${end_point} with configuration (on-fly)"
     echo "From:"
     cat "$1"
@@ -314,6 +323,8 @@ distributed_mode="no"
 distributed_url_end_point=""
 #Allowed values are none, all, one
 healt_check_in_distributed_mode="none"
+#Allowed values yes/no
+force_remove_in_distributed_mode="no"
 
 # Creating TEMP_PATH
 WORKINGPATH=$(mktemp -d --suffix="-kafka-connect-sh")
@@ -359,6 +370,10 @@ while [ -n "$1" ]; do
       ;;
     --health-check-all)
       healt_check_in_distributed_mode="all"
+      shift
+      ;;
+    --force-remove)
+      force_remove_in_distributed_mode="yes"
       shift
       ;;
     start-distributed-worker)
@@ -560,7 +575,7 @@ fi
 case $distributed_mode in
   distributed)
     echo "Launching jobs over distributed cluster workes. End point: $distributed_url_end_point, connectors config: ${connectors_cfg[@]}"
-    launch_over_distributed_worker "$distributed_url_end_point" ${connectors_cfg[@]}
+    launch_over_distributed_worker "$force_remove_in_distributed_mode" "$distributed_url_end_point" ${connectors_cfg[@]}
     health_check_over_distributed_mode "$healt_check_in_distributed_mode" "$distributed_url_end_point" ${connectors_cfg[@]}
     ;;
   worker)
