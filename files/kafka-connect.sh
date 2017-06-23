@@ -95,6 +95,7 @@ start_server_worker() {
 # PARAMS
 ##
 #  $1 endpoint (i.e http://localhost:8083) of distributed worker cluster.
+#  $2..$@ connectors configurations
 launch_over_distributed_worker() {
   local end_point="${1}/connectors"
   shift
