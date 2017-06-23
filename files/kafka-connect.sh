@@ -2,6 +2,9 @@
 set -e
 
 # Common configuration
+WAIT_BETWEEN_CHECKS=${WAIT_BETWEEN_CHECKS:-5}
+CHECK_MESSAGES=${CHECK_MESSAGES:-no}
+CHECK_EGREP_PATTERN=${CHECK_EGREP_PATTERN:-RUNNING}
 
 # Functions
 
@@ -256,6 +259,8 @@ fi
 server_cfg_file="/etc/kafka-connect/connect.properties"
 distributed_mode="no"
 distributed_url_end_point=""
+#Allowed values are none, all, one
+healt_check_in_distributed_mode="none"
 
 # Creating TEMP_PATH
 WORKINGPATH=$(mktemp -d --suffix="-kafka-connect-sh")
@@ -294,6 +299,14 @@ while [ -n "$1" ]; do
         distributed_url_end_point="$2"
       fi
       shift 2
+      ;;
+    --health-check-one)
+      healt_check_in_distributed_mode="one"
+      shift
+      ;;
+    --health-check-all)
+      healt_check_in_distributed_mode="all"
+      shift
       ;;
     start-distributed-worker)
       distributed_mode="worker"
@@ -495,6 +508,7 @@ case $distributed_mode in
   distributed)
     echo "Launching jobs over distributed cluster workes. End point: $distributed_url_end_point, connectors config: ${connectors_cfg[@]}"
     launch_over_distributed_worker "$distributed_url_end_point" ${connectors_cfg[@]}
+    health_check_over_distributed_mode "$healt_check_in_distributed_mode" "$distributed_url_end_point" ${connectors_cfg[@]}
     ;;
   worker)
     echo "Launching worker"
