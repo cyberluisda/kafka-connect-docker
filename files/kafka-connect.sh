@@ -14,7 +14,7 @@ Usage:
 
   kafka-connect.sh
     [ --servercfg <server.cfg> ]
-    [ --distributed-end-point <url> [--health-check-all | --health-check-one]]
+    [ --distributed-end-point <url> [--health-check-all | --health-check-one] [--force-remove]]
     start-distributed-worker | name <name_1> | file <connector_cfg_1>
     [ name <name_2> | file <connector_cfg_2> ... name <name_n> | file <connector_cfg_n> ]
     [ --config-props <property_1=value_1> [<property_2=value_2> ... <property_n=value_n> ]
@@ -47,6 +47,9 @@ Usage:
 
     --health-check-one: Current program will finish with exit status 2 when one
     job connetor will have not any task in running mode.
+
+  --force-remove: If present and connector exists with same name. Existing connector
+    will be removed before launch connector over distributed cluster.
 
   start-distributed-worker: Stars worker node based on configuration of server.cfg
     In this case any connector will be launched, only a worker node.
