@@ -154,6 +154,22 @@ check_exist_in_distributed(){
   fi
 }
 
+##
+# Delete existing job by name
+##
+# PARAMS
+##
+#   $1 endpoint (i.e http://localhost:8083) of distributed worker cluster.
+#   $2 connectors name
+##
+delete_by_name_in_distributed(){
+  if [ -n "$2" ]; then
+    local end_point="$1/connectors/$2"
+    echo "Deleting job $2 ($end_point)"
+
+    curl -XDELETE "$end_point"
+  fi
+}
 
 ##
 # PARAMS
