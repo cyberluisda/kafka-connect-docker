@@ -131,6 +131,31 @@ launch_over_distributed_worker() {
 }
 
 ##
+# Checks if connector loaded from configuratin exists, if exists return connector name.
+# Else return empty string
+##
+# PARAMS
+##
+#   $1 endpoint (i.e http://localhost:8083) of distributed worker cluster.
+#   $2 onnectors configurations
+##
+check_exist_in_distributed(){
+  local end_point="$1/connectors"
+  shift
+  # extract name
+  local name=$(cat "$1" | egrep -oe '^[[:space:]]*name[[:space:]]*=.*' | sed 's/[^= ]*= *//')
+  local error_code=$(curl "$end_point/$name/status" | jq '.error_code' 2> /dev/null)
+
+  # With error_code null connector exists
+  if [ "$error_code" == "null" ]; then
+    echo -n $name
+  else
+    echo -n ""
+  fi
+}
+
+
+##
 # PARAMS
 ##
 #  $1 check mode, allowed values
