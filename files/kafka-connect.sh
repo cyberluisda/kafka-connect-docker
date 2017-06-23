@@ -14,7 +14,7 @@ Usage:
 
   kafka-connect.sh
     [ --servercfg <server.cfg> ]
-    [ --distributed-end-point <url> ]
+    [ --distributed-end-point <url> [--health-check-all | --health-check-one]]
     start-distributed-worker | name <name_1> | file <connector_cfg_1>
     [ name <name_2> | file <connector_cfg_2> ... name <name_n> | file <connector_cfg_n> ]
     [ --config-props <property_1=value_1> [<property_2=value_2> ... <property_n=value_n> ]
@@ -35,6 +35,18 @@ Usage:
   --distributed-end-point <url>: If this opition is present, connectors will be
     launched using REST service behind this <url> end point.
     After response of REST service current process will be end.
+
+  --health-check-one and --health-check-all. When one of this option is present
+    and --distributed-end-point is active too, current program does not finish
+    just after launchs connector over distributed cluster (default). Instead of
+    this current program will remaining checking at least one task per connector
+    is running:
+
+    --health-check-all: Current program will finish with exit status 2 if there
+    are not any job with at least one task in running mode.
+
+    --health-check-one: Current program will finish with exit status 2 when one
+    job connetor will have not any task in running mode.
 
   start-distributed-worker: Stars worker node based on configuration of server.cfg
     In this case any connector will be launched, only a worker node.
