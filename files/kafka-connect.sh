@@ -116,6 +116,69 @@ launch_over_distributed_worker() {
 }
 
 ##
+# PARAMS
+##
+#  $1 check mode, allowed values
+#     none: no check
+#     all: exit with error status when there is not any job which status matchs with
+#          CHECK_EGREP_PATTERN
+#     one: exit with error status when there is at least one job which status matchs with
+#          CHECK_EGREP_PATTERN
+#     ANY_OTHER_VALUE: same as none
+#  $2 endpoint (i.e http://localhost:8083) of distributed worker cluster.
+#  $3..$@ connectors configurations
+health_check_over_distributed_mode(){
+  echo ""
+  echo "Starging health check with config" $@
+  local mode="${1}"
+  shift
+  local end_point="${1}/connectors"
+  shift
+
+  #Extract names
+  local -a names
+  while [ -n "$1" ]; do
+    local name=$(cat "$1" | egrep -oe '^[[:space:]]*name[[:space:]]*=.*' | sed 's/[^= ]*= *//')
+    if [ "$name" == "" ]; then
+      echo "FATAL: I can not extract value of property name from file $1:"
+      cat "$1"
+      exit 1
+    fi
+    names+=($name)
+    shift
+  done
+
+  #Sleep at begin to give time to connectors startup
+  sleep $WAIT_BETWEEN_CHECKS
+
+  while [ "$mode" == "all" -o "$mode" == "one" ]; do
+    local failing=0
+    for (( i=0 ; i<${#names[@]} ; i++ )); do
+      local name="${names[i]}"
+      [ "$CHECK_MESSAGES" == "yes" ] && echo -n "checking connector $name..."
+      if curl -s "${end_point}/$name/status" | egrep -e "$CHECK_EGREP_PATTERN" 2>&1 > /dev/null; then
+        [ "$CHECK_MESSAGES" == "yes" ] && echo "OK"
+      else
+        [ "$CHECK_MESSAGES" == "yes" ] && curl -s "${end_point}/$name/status"
+        [ "$CHECK_MESSAGES" == "yes" ] && echo "KO"
+        failing=$((failing + 1))
+      fi
+
+      if [ "$mode" == "one" -a $failing -gt 0 ]; then
+        echo "Status of job $name returned response that does not match with $CHECK_EGREP_PATTERN patthern and check mode is $mode => ERROR"
+        exit 2
+      fi
+
+      if [ "$mode" == "all" -a $failing -ge ${#names[@]}  ]; then
+        echo "Any job of: ${names[@]} returned response that does not match with $CHECK_EGREP_PATTERN patthern and check mode is $mode => ERROR"
+        exit 2
+      fi
+    done
+    sleep $WAIT_BETWEEN_CHECKS
+  done
+}
+
+##
 # Wrap properties file of connector configuration into a JSON file.
 # and push to sdout
 ##
