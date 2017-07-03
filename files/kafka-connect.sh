@@ -5,6 +5,7 @@ set -e
 WAIT_BETWEEN_CHECKS=${WAIT_BETWEEN_CHECKS:-5}
 CHECK_MESSAGES=${CHECK_MESSAGES:-no}
 CHECK_EGREP_PATTERN=${CHECK_EGREP_PATTERN:-RUNNING}
+CHECK_ONLY_TASK=${CHECK_ONLY_TASK:-yes}
 
 # Functions
 
@@ -223,11 +224,16 @@ health_check_over_distributed_mode(){
     local failing=0
     for (( i=0 ; i<${#names[@]} ; i++ )); do
       local name="${names[i]}"
+      local url="${end_point}/$name/status"
+      local extractJsonPath=""
+      if [ "${CHECK_ONLY_TASK}" == "yes" ]; then
+        extractJsonPath=".tasks"
+      fi
       [ "$CHECK_MESSAGES" == "yes" ] && echo -n "checking connector $name..."
-      if curl -s "${end_point}/$name/status" | egrep -e "$CHECK_EGREP_PATTERN" 2>&1 > /dev/null; then
+      if curl -s "$url" | jq "$extractJsonPath" | egrep -e "$CHECK_EGREP_PATTERN" 2>&1 > /dev/null; then
         [ "$CHECK_MESSAGES" == "yes" ] && echo "OK"
       else
-        [ "$CHECK_MESSAGES" == "yes" ] && curl -s "${end_point}/$name/status"
+        [ "$CHECK_MESSAGES" == "yes" ] && curl -s "$url" | jq "$extractJsonPath"
         [ "$CHECK_MESSAGES" == "yes" ] && echo "KO"
         failing=$((failing + 1))
       fi
