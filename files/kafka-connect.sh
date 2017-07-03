@@ -3,6 +3,7 @@ set -e
 
 # Common configuration
 WAIT_BETWEEN_CHECKS=${WAIT_BETWEEN_CHECKS:-5}
+WAIT_FOR_FIRST_CHECK=${WAIT_FOR_FIRST_CHECK:-15}
 CHECK_MESSAGES=${CHECK_MESSAGES:-no}
 CHECK_EGREP_PATTERN=${CHECK_EGREP_PATTERN:-RUNNING}
 CHECK_ONLY_TASK=${CHECK_ONLY_TASK:-yes}
@@ -104,6 +105,9 @@ Usage:
 
       WAIT_BETWEEN_CHECKS. Used only with --health-check options. Time in seconds to wait
         between two checks. Default: 5
+
+      WAIT_FOR_FIRST_CHECK. Used only with --health-check options. Time in seconds to wait
+        just before to do first check. Default: 15
 
       CHECK_MESSAGES. Used only with --health-check options. If it is "yes" some
         debug information about health check test is showed for stdout. Default "no"
@@ -236,7 +240,7 @@ health_check_over_distributed_mode(){
   done
 
   #Sleep at begin to give time to connectors startup
-  sleep $WAIT_BETWEEN_CHECKS
+  sleep $WAIT_FOR_FIRST_CHECK
 
   while [ "$mode" == "all" -o "$mode" == "one" ]; do
     local failing=0
