@@ -98,6 +98,24 @@ Usage:
   --config-props-over-name-from-env-var,  and --config-props-over-file-from-env-var
   options must be set at end of command line.
 
+  ENVIRONMENT CONFIGURATION.
+    There are some configuration and behaviours that can be set using next Environment
+    Variables:
+
+      WAIT_BETWEEN_CHECKS. Used only with --health-check options. Time in seconds to wait
+        between two checks. Default: 5
+
+      CHECK_MESSAGES. Used only with --health-check options. If it is "yes" some
+        debug information about health check test is showed for stdout. Default "no"
+
+      CHECK_EGREP_PATTERN. Used only with --health-check options. Pattern to match
+        kafka connect status output to consider a Kafa connector as healthy. Default RUNNING
+
+      CHECK_ONLY_TASK. Used only with --health-check options. If it is "yes", task
+        status is filtered from kafka connect status output before to evalue pattern.
+        This is ussefull when kafka connector is in "RUNNING" mode, but all tasks
+        are terminated (with an fatal error for example). Default yes
+
 EOF
 
 }
