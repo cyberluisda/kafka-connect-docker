@@ -5,6 +5,7 @@ set -e
 WAIT_BETWEEN_CHECKS=${WAIT_BETWEEN_CHECKS:-5}
 CHECK_MESSAGES=${CHECK_MESSAGES:-no}
 CHECK_EGREP_PATTERN=${CHECK_EGREP_PATTERN:-RUNNING}
+CHECK_ONLY_TASK=${CHECK_ONLY_TASK:-yes}
 
 # Functions
 
@@ -96,6 +97,24 @@ Usage:
   --config-props-over-file --config-props-from-env-var,
   --config-props-over-name-from-env-var,  and --config-props-over-file-from-env-var
   options must be set at end of command line.
+
+  ENVIRONMENT CONFIGURATION.
+    There are some configuration and behaviours that can be set using next Environment
+    Variables:
+
+      WAIT_BETWEEN_CHECKS. Used only with --health-check options. Time in seconds to wait
+        between two checks. Default: 5
+
+      CHECK_MESSAGES. Used only with --health-check options. If it is "yes" some
+        debug information about health check test is showed for stdout. Default "no"
+
+      CHECK_EGREP_PATTERN. Used only with --health-check options. Pattern to match
+        kafka connect status output to consider a Kafa connector as healthy. Default RUNNING
+
+      CHECK_ONLY_TASK. Used only with --health-check options. If it is "yes", task
+        status is filtered from kafka connect status output before to evalue pattern.
+        This is ussefull when kafka connector is in "RUNNING" mode, but all tasks
+        are terminated (with an fatal error for example). Default yes
 
 EOF
 
@@ -197,7 +216,7 @@ delete_by_name_in_distributed(){
 #  $3..$@ connectors configurations
 health_check_over_distributed_mode(){
   echo ""
-  echo "Starging health check with config" $@
+  echo "Starting health check with config" $@
   local mode="${1}"
   shift
   local end_point="${1}/connectors"
@@ -223,11 +242,16 @@ health_check_over_distributed_mode(){
     local failing=0
     for (( i=0 ; i<${#names[@]} ; i++ )); do
       local name="${names[i]}"
+      local url="${end_point}/$name/status"
+      local extractJsonPath=""
+      if [ "${CHECK_ONLY_TASK}" == "yes" ]; then
+        extractJsonPath=".tasks"
+      fi
       [ "$CHECK_MESSAGES" == "yes" ] && echo -n "checking connector $name..."
-      if curl -s "${end_point}/$name/status" | egrep -e "$CHECK_EGREP_PATTERN" 2>&1 > /dev/null; then
+      if curl -s "$url" | jq "$extractJsonPath" | egrep -e "$CHECK_EGREP_PATTERN" 2>&1 > /dev/null; then
         [ "$CHECK_MESSAGES" == "yes" ] && echo "OK"
       else
-        [ "$CHECK_MESSAGES" == "yes" ] && curl -s "${end_point}/$name/status"
+        [ "$CHECK_MESSAGES" == "yes" ] && curl -s "$url" | jq "$extractJsonPath"
         [ "$CHECK_MESSAGES" == "yes" ] && echo "KO"
         failing=$((failing + 1))
       fi
