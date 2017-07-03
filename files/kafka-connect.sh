@@ -197,7 +197,7 @@ delete_by_name_in_distributed(){
 #  $3..$@ connectors configurations
 health_check_over_distributed_mode(){
   echo ""
-  echo "Starging health check with config" $@
+  echo "Starting health check with config" $@
   local mode="${1}"
   shift
   local end_point="${1}/connectors"
