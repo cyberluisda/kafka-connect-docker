@@ -275,6 +275,15 @@ health_check_over_distributed_mode(){
 }
 
 ##
+##
+##
+# $1 string with json to escape
+#
+escapeJson(){
+    echo -n "$1" | sed 's/"/\\"/g' | sed -r 's/$/\\n/g'| tr -d "\n"
+}
+
+##
 # Wrap properties file of connector configuration into a JSON file.
 # and push to sdout
 ##
