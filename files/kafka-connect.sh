@@ -7,6 +7,7 @@ WAIT_FOR_FIRST_CHECK=${WAIT_FOR_FIRST_CHECK:-15}
 CHECK_MESSAGES=${CHECK_MESSAGES:-no}
 CHECK_EGREP_PATTERN=${CHECK_EGREP_PATTERN:-RUNNING}
 CHECK_ONLY_TASK=${CHECK_ONLY_TASK:-yes}
+CHECK_LOGSTASH_URI="${CHECK_LOGSTASH_URI}"
 
 # Functions
 
@@ -252,21 +253,27 @@ health_check_over_distributed_mode(){
         extractJsonPath=".tasks"
       fi
       [ "$CHECK_MESSAGES" == "yes" ] && echo -n "checking connector $name..."
-      if curl -s "$url" | jq "$extractJsonPath" | egrep -e "$CHECK_EGREP_PATTERN" 2>&1 > /dev/null; then
+      local curlOutput="$(curl -s "$url")"
+      local curlFiltered="$(echo "$curlOutput" | jq "$extractJsonPath")"
+      if echo "$curlFiltered" | egrep -e "$CHECK_EGREP_PATTERN" 2>&1 > /dev/null; then
         [ "$CHECK_MESSAGES" == "yes" ] && echo "OK"
+        [ "$CHECK_MESSAGES" == "yes" ] && logstash "Checking pattern $CHECK_EGREP_PATTERN over $curlOutput filtered by $extractJsonPath => $curlFiltered with result OK" "DEBUG"
       else
-        [ "$CHECK_MESSAGES" == "yes" ] && curl -s "$url" | jq "$extractJsonPath"
+        [ "$CHECK_MESSAGES" == "yes" ] && echo "$curlFiltered"
         [ "$CHECK_MESSAGES" == "yes" ] && echo "KO"
+        logstash "Checking pattern $CHECK_EGREP_PATTERN over $curlOutput filtered by $extractJsonPath => $curlFiltered with result FAILS" "WARN"
         failing=$((failing + 1))
       fi
 
       if [ "$mode" == "one" -a $failing -gt 0 ]; then
         echo "Status of job $name returned response that does not match with $CHECK_EGREP_PATTERN patthern and check mode is $mode => ERROR"
+        logstash "Status of job $name returned response that does not match with $CHECK_EGREP_PATTERN patthern and check mode is $mode => ERROR" "ERROR"
         exit 2
       fi
 
       if [ "$mode" == "all" -a $failing -ge ${#names[@]}  ]; then
         echo "Any job of: ${names[@]} returned response that does not match with $CHECK_EGREP_PATTERN patthern and check mode is $mode => ERROR"
+        logstash "Any job of: ${names[@]} returned response that does not match with $CHECK_EGREP_PATTERN patthern and check mode is $mode => ERROR" "ERROR"
         exit 2
       fi
     done
