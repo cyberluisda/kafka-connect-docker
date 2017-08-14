@@ -8,6 +8,7 @@ CHECK_MESSAGES=${CHECK_MESSAGES:-no}
 CHECK_EGREP_PATTERN=${CHECK_EGREP_PATTERN:-RUNNING}
 CHECK_ONLY_TASK=${CHECK_ONLY_TASK:-yes}
 CHECK_LOGSTASH_URI="${CHECK_LOGSTASH_URI}"
+CHECK_LOGSTASH_TIMEOUT="${CHECK_LOGSTASH_TIMEOUT:-2}"
 
 # Functions
 
@@ -125,6 +126,9 @@ Usage:
         defined, some health-check messages will be sent to logstash server in
         json format through tcp (using nc).
         Expected format is host:port where logstash is listening.
+
+      CHECK_LOGSTASH_TIMEOUT. Used only with --health-check options. Timeout to
+        send data to logstash when CLECH_LOGSTASH_URI is active. Default $CHECK_LOGSTASH_TIMEOUT
 
 EOF
 
@@ -307,12 +311,13 @@ logstash(){
   then
     local logstashHost=${logstashUri%:*}
     local logstashPort=${logstashUri#*:}
+    local logstashTimeout=${CHECK_LOGSTASH_TIMEOUT}
     local timestamp="$(date +%s)000"
     local hostname="$(hostname)"
     local jsonMessage="{ \"timestamp\": \"$timestamp\", \"HOSTNAME\": \"$hostname\", \"level\": \"$level\", \"message\": \"$message\"}"
     local verbose=""
     [ "$CHECK_MESSAGES" == "yes" ] && verbose="-vv"
-    echo "$jsonMessage" | nc $verbose $logstashHost $logstashPort
+    echo "$jsonMessage" | nc -w $logstashTimeout $verbose $logstashHost $logstashPort
   fi
 }
 
