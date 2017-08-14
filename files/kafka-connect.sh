@@ -121,6 +121,11 @@ Usage:
         This is ussefull when kafka connector is in "RUNNING" mode, but all tasks
         are terminated (with an fatal error for example). Default yes
 
+      CHECK_LOGSTASH_URI. Used only with --health-check options. If it is
+        defined, some health-check messages will be sent to logstash server in
+        json format through tcp (using nc).
+        Expected format is host:port where logstash is listening.
+
 EOF
 
 }
