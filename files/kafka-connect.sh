@@ -275,6 +275,35 @@ health_check_over_distributed_mode(){
 }
 
 ##
+# PARAMS
+##
+#  $1 message will be sent to logstash
+#  $2 Optional level message, default INFO
+#  $3 Optional host:port where logstash is listening.
+#     If it is empty. CHECK_LOGSTASH_URI will be use.
+#     If CHECK_LOGSTASH_URI is empty any message will be launched (deactivated)
+#
+logstash(){
+  local message="$(escapeJson "$1")"
+  local level="$2"
+  [ -z "$level" ] && level="INFO"
+
+  local logstashUri="$3"
+  [ -z "$logstashUri" ] && logstashUri="${CHECK_LOGSTASH_URI}"
+
+  if [ -n "$logstashUri" ]
+  then
+    local logstashHost=${logstashUri%:*}
+    local logstashPort=${logstashUri#*:}
+    local timestamp="$(date +%s)000"
+    local hostname="$(hostname)"
+    local jsonMessage="{ \"timestamp\": \"$timestamp\", \"HOSTNAME\": \"$hostname\", \"level\": \"$level\", \"message\": \"$message\"}"
+    local verbose=""
+    [ "$CHECK_MESSAGES" == "yes" ] && verbose="-vv"
+    echo "$jsonMessage" | nc $verbose $logstashHost $logstashPort
+  fi
+}
+
 ##
 ##
 # $1 string with json to escape
