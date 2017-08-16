@@ -53,3 +53,9 @@ And other (config in `files/kconnect/input.properties`) one loads data from
   Please, have in mind, that last command delete all local docker images which
   name contains `dockercompose`. This is default project name set by docker-compose
   (it is extracted from `docker-compose` path where example is saved).
+
+* Clean local docker volumes.
+
+  ```
+  docker volume prune -f
+  ```
