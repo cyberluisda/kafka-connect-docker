@@ -1,0 +1,99 @@
+---
+version: '2.1'
+services:
+  #docker-compose run create-topics and then docker-comp run -d target to start pipeline
+  create-topics:
+    image: cyberluisda/kafka-ctrl:0.11.0.0
+    depends_on:
+      kafka:
+        condition: service_healthy
+    command:
+      - create-topic
+      - -s
+      - -p
+      - "4"
+      - test-topic
+      - -p
+      - "1"
+      - -c
+      - cleanup.policy=compact
+      - connect-offset
+      - connect-config
+      - connect-status
+  target:
+    image: busybox
+    command:
+      - echo
+    depends_on:
+      kconnector-input:
+        condition: service_started
+      kconnector-output:
+        condition: service_started
+
+  kconnector-input:
+    build: ..
+    volumes:
+      - ./files/kconnect:/etc/kafka-connect
+    depends_on:
+      kafka:
+        condition: service_healthy
+      kconnect:
+        condition: service_healthy
+    command:
+      - '--distributed-end-point'
+      - 'http://kconnect:8083'
+      - name
+      - input
+
+  kconnector-output:
+    build: ..
+    volumes:
+      - ./files/kconnect:/etc/kafka-connect
+    depends_on:
+      kafka:
+        condition: service_healthy
+      kconnect:
+        condition: service_healthy
+    command:
+      - '--distributed-end-point'
+      - 'http://kconnect:8083'
+      - name
+      - output
+
+  kconnect:
+    build: ..
+    volumes:
+      - ./files/kconnect:/etc/kafka-connect
+      - ./files/data:/var/data
+    depends_on:
+      kafka:
+        condition: service_healthy
+    environment:
+      KAFKA_HEAP_OPTS: "-Xmx2g"
+    healthcheck:
+      test: 'curl "http://localhost:8083/connectors"'
+    command:
+      - start-distributed-worker
+
+  kafka:
+    image: openshine/kafka:0.11.0.0
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ADVERTISED_HOST_NAME: kafka
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_PORT: 9092
+      KAFKA_DELETE_TOPIC_ENABLE: "true"
+
+    depends_on:
+      zookeeper:
+        condition: service_started
+    healthcheck:
+      test: "netstat -plnt | fgrep ':9092'"
+  zookeeper:
+    image: wurstmeister/zookeeper
+
+  # Helper services to use (for example) with run --rm
+  kafka-ctl:
+    image: cyberluisda/kafka-ctrl:0.11.0.0
+  curl:
+    image: appropriate/curl
