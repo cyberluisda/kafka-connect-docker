@@ -11,7 +11,7 @@ To run example in distributed mode with using docker compose follow next steps:
 
   ```
   cd docker-compose
-  ``
+  ```
 
 * Create topics
 
